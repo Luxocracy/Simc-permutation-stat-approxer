@@ -1,6 +1,7 @@
 <html>
 	<head>
 		<link href="style.css" rel="stylesheet" type="text/css">
+		<script src="sorttable.js"></script>
 		<script
 	  src="https://code.jquery.com/jquery-3.2.1.min.js"
 	  integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
@@ -9,7 +10,8 @@
 			var Items = {
 				ids: []
 			};
-			var Profiles = [];
+			var Profiles = {};
+			var playerClass = "";
 
 			var tempItemData = {"agi":1112,"agistrint":1112,"appearances":{"0":[158279,""]},"armor":150,"critstrkrtng":543,"displayid":158279,"hastertng":351,"versatility":847,"mastrtng":847,"int":1112,"reqlevel":110,"sellprice":463289,"slotbak":16,"sta":1668,"str":1112,"name":"Cape of Mindless Fury"};
 			var tempItemData2 = {"critstrkrtng":847,"hastertng":847,"mastrtng":847,"reqlevel":110,"sellprice":485043,"slotbak":12,"versatility":847,"name":"Unstable Arcanocrystal"};
@@ -25,11 +27,17 @@
 					init: function() {
 						var string = document.querySelector('#paste').value;
 						var array  = string.match(/^.*/gm);
+						var plaintext = "";
 						var tempProfile = {};
 
 						var pushProfile = function() {
+							if(Object.keys(tempProfile).length === 0) return;
 							tempProfile.stats = {crit: 0, haste: 0, mastery: 0, vers: 0};
-							Profiles.push(tempProfile);
+							tempProfile.text 	= plaintext;
+							Profiles[tempProfile[playerClass]] = tempProfile;
+
+						 // Clear variables
+							plaintext = "";
 							tempProfile = {};
 						}
 
@@ -42,6 +50,7 @@
 							let mainMatch = array[i].match(/(.*?)\=(.*?)($|\,)(.*)/);
 							if(!mainMatch) continue;
 
+							plaintext += mainMatch[0]+'\n';
 							let subMatches = mainMatch[4];
 							if(subMatches) {
 								let subArray = subMatches.split(',');
@@ -58,15 +67,17 @@
 						pushProfile();
 					},
 					stats: function() {
-						for(var i=0; i < Profiles.length; i++) {
-							for (var key in Profiles[i]) {
-								if(Profiles[i].hasOwnProperty(key)) {
-									if(typeof Profiles[i][key] === "object" && Profiles[i][key].id) {
-										let item = Items[Profiles[i][key].id];
-										Profiles[i].stats.crit 		+= item.critstrkrtng || 0;
-										Profiles[i].stats.haste 	+= item.hastertng || 0;
-										Profiles[i].stats.mastery += item.mastrtng || 0;
-										Profiles[i].stats.vers 		+= item.versatility || 0;
+						for (var profile in Profiles) {
+							if(Profiles.hasOwnProperty(profile)) {
+								for (var key in Profiles[profile]) {
+									if(Profiles[profile].hasOwnProperty(key)) {
+										if(typeof Profiles[profile][key] === "object" && Profiles[profile][key].id) {
+											let item = Items[Profiles[profile][key].id];
+											Profiles[profile].stats.crit 		+= item.critstrkrtng || 0;
+											Profiles[profile].stats.haste 	+= item.hastertng || 0;
+											Profiles[profile].stats.mastery += item.mastrtng || 0;
+											Profiles[profile].stats.vers 		+= item.versatility || 0;
+										}
 									}
 								}
 							}
@@ -74,10 +85,12 @@
 					}
 				},
 				items: function() {
-					for(var i=0; i < Profiles.length; i++) {
-						for (var key in Profiles[i]) {
-							if(Profiles[i].hasOwnProperty(key)) {
-								if(typeof Profiles[i][key] === "object" && Profiles[i][key].id) Items.ids.push(Profiles[i][key].id);
+					for (var profile in Profiles) {
+						if(Profiles.hasOwnProperty(profile)) {
+							for (var key in Profiles[profile]) {
+								if(Profiles[profile].hasOwnProperty(key)) {
+									if(typeof Profiles[profile][key] === "object" && Profiles[profile][key].id) Items.ids.push(Profiles[profile][key].id);
+								}
 							}
 						}
 					}
@@ -100,8 +113,8 @@
 			}
 
 			function getItemData(id, callback) {
-				callback(tempItemData2);
-				return; //Only returns test data. Remove when done
+				// callback(tempItemData2);
+				// return; //Only returns test data. Remove when done
 				if(id === undefined) return;
 				var url = 'http://www.wowhead.com/item='+id;
 				$.get("http://cors-anywhere.herokuapp.com/"+url, function(data) {
@@ -117,24 +130,48 @@
 
 			function generateTable() {
 				var table = document.querySelector('#profile_list > tbody');
-				for(let i=0; i < Profiles.length; i++) {
-					let row = document.createElement('tr');
-					let stats = Profiles[i].stats;
-					for (var key in stats) {
-						if(stats.hasOwnProperty(key)) {
-							let div = document.createElement('td');
-							div.innerText = stats[key];
-							row.appendChild(div);
+				for (var profile in Profiles) {
+					if(Profiles.hasOwnProperty(profile)) {
+						let row = document.createElement('tr');
+						let stats = Profiles[profile].stats;
+						for (var key in stats) {
+							if(stats.hasOwnProperty(key)) {
+								let div = document.createElement('td');
+								div.innerText = stats[key];
+								row.appendChild(div);
+							}
 						}
+						let name = document.createElement('td');
+						name.innerText = profile;
+						row.prepend(name);
+						row.setAttribute('profile', profile);
+						table.appendChild(row);
 					}
-					let name = document.createElement('td');
-					name.innerText = Profiles[i].mage;
-					row.prepend(name);
-					table.appendChild(row);
 				}
 			};
 
+			function generateOutput() {
+				// "Example_T20"_00001
+				var ids = $('.table .selected').map(function() {
+					return this.getAttribute('profile');
+				}).get();
+	
+				var output = document.querySelector('#output');
+				var outputString = "";
+				for(var i=0; i < ids.length; i++) {
+					outputString += Profiles[ids[i]].text + '\n';
+				}
+				output.value = outputString;
+			}
+
+			function updatePlayerClass() {
+				playerClass = document.querySelector('#playerClass').value;
+				return (playerClass) ? true:false;
+			};
+
 			function runParser() {
+				var validChoice = updatePlayerClass();
+				if(!validChoice) return;
 				Parse.profiles.init();
 				Parse.items();
 				gatherItemData(function() {
@@ -143,11 +180,25 @@
 					console.log('Finished parsing profiles!');
 				});
 			}
+
+			$(document).on('click', '.table tr',function(e) {
+				$(this).toggleClass('selected');
+			});
 		</script>
+		<style>
+			html, body {
+				min-height: inherit !important;
+   			height: inherit !important;
+			}
+
+			.table > tbody > tr.selected > td,
+			.table > tbody > tr.selected > th {
+			  background-color: rgba(0, 0, 0, 0.12);
+			}
+		</style>
 	</head>
 	<body>
-		<textarea id="paste" spellcheck=false style="margin: 0px; height: 800px; width: 1000px;">
-mage="Syana_T20"_00001
+		<textarea id="paste" spellcheck=false style="margin: 0px; height: 40%; width: 40%;">mage="Syana_T20"_00001
 specialization=fire
 race=human
 level=110
@@ -197,9 +248,30 @@ finger2=seal_of_the_second_duumvirate,id=147195,bonus_id=3563/1522,enchant=bindi
 trinket1=tarnished_sentinel_medallion,id=147017,ilevel=930
 trinket2=terror_from_below,id=147016,ilevel=930
 main_hand=felomelorn,id=128820,gem_id=147089/147079/147089,relic_ilevel=930/940/930
-off_hand=heart_of_the_phoenix,id=133959
-		</textarea>
-		<table id="profile_list" class="table table-bordered">
+off_hand=heart_of_the_phoenix,id=133959</textarea>
+		<textarea id="output" spellcheck=false style="margin: 0px; height: 40%; width: 40%;">Output is generated here.</textarea>
+		<select id="playerClass" style="position: absolute; margin: 1rem;">
+			<option value="" selected>--Choose Class--</option>
+			<option value="deathknight">Death Knight</option>
+			<option value="demonhunter">Demon Hunter</option>
+			<option value="druid">Druid</option>
+			<option value="hunter">Hunter</option>
+			<option value="mage">Mage</option>
+			<option value="monk">Monk</option>
+			<option value="paladin">Paladin</option>
+			<option value="priest">Priest</option>
+			<option value="rogue">Rogue</option>
+			<option value="shaman">Shaman</option>
+			<option value="warlock">Warlock</option>
+			<option value="warrior">Warrior</option>
+		</select>
+		<div style="display:inline-block">
+			<div class="wrapper" style="position: absolute; margin: -3rem 1rem; display: inline-block;">
+				<button onClick=runParser(); style="display: inline-block;">Start Parsing</button>
+				<button onClick=generateOutput(); style="display: inline-block;">Export selected</button>
+			</div>
+		</div>
+		<table id="profile_list" class="table table-bordered sortable">
 			<tbody>
 				<tr>
 					<th>Profile</th>
