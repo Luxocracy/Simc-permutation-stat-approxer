@@ -70,6 +70,7 @@ body {
   max-width: 100%;
   margin-bottom: 2rem;
   background-color: #fff;
+  user-select: none;
 }
 .table > thead > tr,
 .table > tbody > tr,

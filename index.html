@@ -128,6 +128,24 @@
 				});
 			}
 
+			function getItemDataBlizz(id, callback) {
+				// callback(tempItemData2);
+				// return; //Only returns test data. Remove when done
+				if(id === undefined) return;
+				var url = 'https://us.api.battle.net/wow/item/'+id+'?locale=en_US&apikey=hec6wsprmpe2kk5cq73bnneecbetx9j5';
+				$.get(url, function(data) {
+					console.log(data);
+					var stats = data;
+					var regex = new RegExp('\\_\\['+ id +'\\]\\=(\\{.*?\\}\\;)');
+					var stats = JSON.parse(data.match(regex)[1].slice(0, -1));
+					var name 	= stats.name_enus;
+							stats = stats.jsonequip;
+							stats.name = name;
+
+					if(typeof callback === 'function') callback(stats);
+				});
+			}
+
 			function generateTable() {
 				var table = document.querySelector('#profile_list > tbody');
 				for (var profile in Profiles) {
@@ -181,8 +199,37 @@
 				});
 			}
 
-			$(document).on('click', '.table tr',function(e) {
-				$(this).toggleClass('selected');
+			$(document).off('click').on('click', '.table tr', function(e) {
+				if(e.shiftKey) {
+					e.preventDefault();
+					let failsafe = 0;
+					let endFound = false;
+					let lastSelected = $('.selected.lastSelected')[0];
+					let sibling = $(lastSelected);
+					$(this).addClass('shiftEnd');
+					while(!endFound) {
+						sibling = (this.rowIndex < lastSelected.rowIndex) ? $(sibling)[0].previousSibling:$(sibling)[0].nextSibling;
+						if(!$(sibling).hasClass('shiftEnd')) {
+							failsafe++;
+							$(sibling).addClass('selected');
+						} else {
+							$(sibling).addClass('selected');
+							endFound = true;
+							$(this).removeClass('shiftEnd');
+						}
+						if(failsafe >= 10000) endFound = true;
+					}
+					// $(items).addClass('selected');
+				} else {
+					if(!$(this).hasClass('selected')) {
+						$('.lastSelected').removeClass('lastSelected');
+						$(this).addClass('lastSelected');
+					} else {
+						$('.lastSelected').removeClass('lastSelected');
+					}
+					
+					$(this).toggleClass('selected');
+				}
 			});
 		</script>
 		<style>
