@@ -7,11 +7,14 @@
 	  integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
 	  crossorigin="anonymous"></script>
 		<script>
+			// Regex for parsing simc results.
+			//<h2.*[0-9]+ dps<\/h2>
 			var Items = {
-				ids: []
+				list: []
 			};
 			var Profiles = {};
 			var playerClass = "";
+			var parserRunning = false;
 
 			var tempItemData = {"agi":1112,"agistrint":1112,"appearances":{"0":[158279,""]},"armor":150,"critstrkrtng":543,"displayid":158279,"hastertng":351,"versatility":847,"mastrtng":847,"int":1112,"reqlevel":110,"sellprice":463289,"slotbak":16,"sta":1668,"str":1112,"name":"Cape of Mindless Fury"};
 			var tempItemData2 = {"critstrkrtng":847,"hastertng":847,"mastrtng":847,"reqlevel":110,"sellprice":485043,"slotbak":12,"versatility":847,"name":"Unstable Arcanocrystal"};
@@ -32,7 +35,7 @@
 
 						var pushProfile = function() {
 							if(Object.keys(tempProfile).length === 0) return;
-							tempProfile.stats = {crit: 0, haste: 0, mastery: 0, vers: 0};
+							tempProfile.stats = {crit: 0, haste: 0, mastery: 0, vers: 0, strength: 0, agility: 0, intellect: 0, stamina: 0};
 							tempProfile.text 	= plaintext;
 							Profiles[tempProfile[playerClass]] = tempProfile;
 
@@ -73,10 +76,46 @@
 									if(Profiles[profile].hasOwnProperty(key)) {
 										if(typeof Profiles[profile][key] === "object" && Profiles[profile][key].id) {
 											let item = Items[Profiles[profile][key].id];
-											Profiles[profile].stats.crit 		+= item.critstrkrtng || 0;
-											Profiles[profile].stats.haste 	+= item.hastertng || 0;
-											Profiles[profile].stats.mastery += item.mastrtng || 0;
-											Profiles[profile].stats.vers 		+= item.versatility || 0;
+											// Profiles[profile].stats.crit 		+= item.critstrkrtng || 0;
+											// Profiles[profile].stats.haste 	+= item.hastertng || 0;
+											// Profiles[profile].stats.mastery += item.mastrtng || 0;
+											// Profiles[profile].stats.vers 		+= item.versatility || 0;
+											for(let i=0; i < item.length; i++) {
+												switch(item[i].stat) {
+												// Strength //
+													case 3:
+														Profiles[profile].stats.strength += item[i].amount || 0;
+													break;
+												// Agility //
+													case 4:
+														Profiles[profile].stats.agility += item[i].amount || 0;
+													break;
+												// Intellect //
+													case 5:
+														Profiles[profile].stats.intellect += item[i].amount || 0;
+													break;
+												// Stamina //
+													case 7:
+														Profiles[profile].stats.stamina += item[i].amount || 0;
+													break;
+												// Crit //
+													case 32:
+														Profiles[profile].stats.crit += item[i].amount || 0;
+													break;
+												// Haste //
+													case 36:
+														Profiles[profile].stats.haste += item[i].amount || 0;
+													break;
+												// Vers //
+													case 40:
+														Profiles[profile].stats.vers += item[i].amount || 0;
+													break;
+												// Mastery //
+													case 49:
+														Profiles[profile].stats.mastery += item[i].amount || 0;
+													break;
+												}
+											}
 										}
 									}
 								}
@@ -89,36 +128,36 @@
 						if(Profiles.hasOwnProperty(profile)) {
 							for (var key in Profiles[profile]) {
 								if(Profiles[profile].hasOwnProperty(key)) {
-									if(typeof Profiles[profile][key] === "object" && Profiles[profile][key].id) Items.ids.push(Profiles[profile][key].id);
+									if(typeof Profiles[profile][key] === "object" && Profiles[profile][key].id) Items.list.push({id: Profiles[profile][key].id, bonus_id: Profiles[profile][key].bonus_id});
 								}
 							}
 						}
 					}
-					Items.ids = Items.ids.getUnique();
+					Items.list = Items.list.getUnique();
 				}
 			}
 
 			function gatherItemData(callback) {
 				var itemLoop = function(i) {
-					if(!Items.ids[i]) {
+					if(!Items.list[i]) {
 						callback();
 						return;
 					}
-					getItemData(Items.ids[i], function(stats) {
-							Items[Items.ids[i]] = stats;
+					getItemDataBlizz(Items.list[i], function(stats) {
+							Items[Items.list[i].id] = stats;
 							itemLoop(i+1);
 					});
 				}
 				itemLoop(0);
 			}
 
-			function getItemData(id, callback) {
+			function getItemData(item, callback) {
 				// callback(tempItemData2);
 				// return; //Only returns test data. Remove when done
-				if(id === undefined) return;
-				var url = 'http://www.wowhead.com/item='+id;
+				if(item === undefined) return;
+				var url = 'http://www.wowhead.com/item='+item.id;
 				$.get("http://cors-anywhere.herokuapp.com/"+url, function(data) {
-					var regex = new RegExp('\\_\\['+ id +'\\]\\=(\\{.*?\\}\\;)');
+					var regex = new RegExp('\\_\\['+ item.id +'\\]\\=(\\{.*?\\}\\;)');
 					var stats = JSON.parse(data.match(regex)[1].slice(0, -1));
 					var name 	= stats.name_enus;
 							stats = stats.jsonequip;
@@ -128,19 +167,18 @@
 				});
 			}
 
-			function getItemDataBlizz(id, callback) {
+			function getItemDataBlizz(item, callback) {
+				item.bonus_id = (item.bonus_id) ? item.bonus_id.replace(/\//gi, ','):"";
 				// callback(tempItemData2);
 				// return; //Only returns test data. Remove when done
-				if(id === undefined) return;
-				var url = 'https://us.api.battle.net/wow/item/'+id+'?locale=en_US&apikey=hec6wsprmpe2kk5cq73bnneecbetx9j5';
+				if(item.id === undefined) return;
+				var url = 'https://us.api.battle.net/wow/item/'+item.id+'?locale=en_US&apikey=hec6wsprmpe2kk5cq73bnneecbetx9j5&bl='+item.bonus_id;	// ',' Separated list of bonus list
 				$.get(url, function(data) {
-					console.log(data);
 					var stats = data;
-					var regex = new RegExp('\\_\\['+ id +'\\]\\=(\\{.*?\\}\\;)');
-					var stats = JSON.parse(data.match(regex)[1].slice(0, -1));
-					var name 	= stats.name_enus;
-							stats = stats.jsonequip;
-							stats.name = name;
+					var regex = new RegExp('\\_\\['+ item.id +'\\]\\=(\\{.*?\\}\\;)');
+					// var stats = JSON.parse(data.match(regex)[1].slice(0, -1));
+					var stats = data;
+					var stats = stats.bonusStats;
 
 					if(typeof callback === 'function') callback(stats);
 				});
@@ -170,14 +208,14 @@
 
 			function generateOutput() {
 				// "Example_T20"_00001
-				var ids = $('.table .selected').map(function() {
+				var list = $('.table .selected').map(function() {
 					return this.getAttribute('profile');
 				}).get();
 	
 				var output = document.querySelector('#output');
 				var outputString = "";
-				for(var i=0; i < ids.length; i++) {
-					outputString += Profiles[ids[i]].text + '\n';
+				for(var i=0; i < list.length; i++) {
+					outputString += Profiles[list[i]].text + '\n';
 				}
 				output.value = outputString;
 			}
@@ -188,6 +226,8 @@
 			};
 
 			function runParser() {
+				if(parserRunning) return;
+				parserRunning = true;
 				var validChoice = updatePlayerClass();
 				if(!validChoice) return;
 				Parse.profiles.init();
@@ -195,6 +235,7 @@
 				gatherItemData(function() {
 					Parse.profiles.stats();
 					generateTable();
+					parserRunning = false;
 					console.log('Finished parsing profiles!');
 				});
 			}
@@ -326,6 +367,10 @@ off_hand=heart_of_the_phoenix,id=133959</textarea>
 					<th>Haste</th>
 					<th>Mastery</th>
 					<th>Versatility</th>
+					<th>Strength</th>
+					<th>Agility</th>
+					<th>Intellect</th>
+					<th>Stamina</th>
 		  </tr>
 		  </tbody>
 		</table>
