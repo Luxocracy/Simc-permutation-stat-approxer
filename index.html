@@ -9,45 +9,57 @@
 		<script>
 			// Regex for parsing simc results.
 			//<h2.*[0-9]+ dps<\/h2>
+			Array.prototype.getUnique = function() {
+				var items = [];
+				var uniques = this.map(item => item.id).filter(function(value, index, self) { 
+					return self.indexOf(value) === index;
+				});
+
+			// Loop through uniques with splice & push the matching item from 'this' into the return array.
+				while(uniques.length > 0) {
+					let id = uniques.splice(0, 1)[0];
+					for(let i=0; i < this.length; i++) {
+						if(this[i].id === id) {
+							items.push(this[i]);
+							break;
+						}
+					}
+				}
+				return items;
+			}
+
 			var Items = {
 				list: []
 			};
 			var Profiles = {};
-			var playerClass = "";
 			var parserRunning = false;
-
-			var tempItemData = {"agi":1112,"agistrint":1112,"appearances":{"0":[158279,""]},"armor":150,"critstrkrtng":543,"displayid":158279,"hastertng":351,"versatility":847,"mastrtng":847,"int":1112,"reqlevel":110,"sellprice":463289,"slotbak":16,"sta":1668,"str":1112,"name":"Cape of Mindless Fury"};
-			var tempItemData2 = {"critstrkrtng":847,"hastertng":847,"mastrtng":847,"reqlevel":110,"sellprice":485043,"slotbak":12,"versatility":847,"name":"Unstable Arcanocrystal"};
-
-			Array.prototype.getUnique = function() {
-				return this.filter(function(value, index, self) { 
-					return self.indexOf(value) === index;
-				});
-			}
 
 			var Parse = {
 				profiles: {
 					init: function() {
 						var string = document.querySelector('#paste').value;
-						var array  = string.match(/^.*/gm);
+						var array  = string.match(/^.*/gm);	// Put each line into an array.
 						var plaintext = "";
 						var tempProfile = {};
+						var profileName = "";
 
-						var pushProfile = function() {
+						var pushProfile = function(profileName) {
 							if(Object.keys(tempProfile).length === 0) return;
 							tempProfile.stats = {crit: 0, haste: 0, mastery: 0, vers: 0, strength: 0, agility: 0, intellect: 0, stamina: 0};
 							tempProfile.text 	= plaintext;
-							Profiles[tempProfile[playerClass]] = tempProfile;
+							Profiles[tempProfile[profileName]] = tempProfile;
 
 						 // Clear variables
 							plaintext = "";
 							tempProfile = {};
 						}
 
+					// Loop through the array of lines & 'pushProfile' if the start of a new profile was found & at the end of the array.
 						for(let i=0; i < array.length; i++) {
-							if(!array[i]) {
-								pushProfile();
-								continue;
+							let profileMatch = array[i].match(/(druid|hunter|mage|paladin|priest|rogue|shaman|warlock|warrior|deathknight|monk|demonhunter|armory)\=/);
+							if(profileMatch && profileMatch.length > 0) {
+								pushProfile(profileName);
+								profileName = profileMatch[1];
 							}
 
 							let mainMatch = array[i].match(/(.*?)\=(.*?)($|\,)(.*)/);
@@ -67,19 +79,16 @@
 								tempProfile[mainMatch[1]] = mainMatch[2];
 							}
 						}
-						pushProfile();
+						pushProfile(profileName);
 					},
 					stats: function() {
+					// Loop through the Profiles and add the stats of each item to an overall profile stat amount.
 						for (var profile in Profiles) {
 							if(Profiles.hasOwnProperty(profile)) {
 								for (var key in Profiles[profile]) {
 									if(Profiles[profile].hasOwnProperty(key)) {
 										if(typeof Profiles[profile][key] === "object" && Profiles[profile][key].id) {
 											let item = Items[Profiles[profile][key].id];
-											// Profiles[profile].stats.crit 		+= item.critstrkrtng || 0;
-											// Profiles[profile].stats.haste 	+= item.hastertng || 0;
-											// Profiles[profile].stats.mastery += item.mastrtng || 0;
-											// Profiles[profile].stats.vers 		+= item.versatility || 0;
 											for(let i=0; i < item.length; i++) {
 												switch(item[i].stat) {
 												// Strength //
@@ -124,6 +133,7 @@
 					}
 				},
 				items: function() {
+				// Get all items from each profile & then remove any duplicates.
 					for (var profile in Profiles) {
 						if(Profiles.hasOwnProperty(profile)) {
 							for (var key in Profiles[profile]) {
@@ -137,6 +147,7 @@
 				}
 			}
 
+		// Loop through the Items list and get item data from Blizzard API
 			function gatherItemData(callback) {
 				var itemLoop = function(i) {
 					if(!Items.list[i]) {
@@ -151,9 +162,8 @@
 				itemLoop(0);
 			}
 
+		// Get item data from wowhead (Deprecated as I found out how to add bonus ids to the blizzard API for accurate ilevels)
 			function getItemData(item, callback) {
-				// callback(tempItemData2);
-				// return; //Only returns test data. Remove when done
 				if(item === undefined) return;
 				var url = 'http://www.wowhead.com/item='+item.id;
 				$.get("http://cors-anywhere.herokuapp.com/"+url, function(data) {
@@ -167,23 +177,21 @@
 				});
 			}
 
+		// Get item data through the Blizzard Community API
 			function getItemDataBlizz(item, callback) {
 				item.bonus_id = (item.bonus_id) ? item.bonus_id.replace(/\//gi, ','):"";
-				// callback(tempItemData2);
-				// return; //Only returns test data. Remove when done
 				if(item.id === undefined) return;
 				var url = 'https://us.api.battle.net/wow/item/'+item.id+'?locale=en_US&apikey=hec6wsprmpe2kk5cq73bnneecbetx9j5&bl='+item.bonus_id;	// ',' Separated list of bonus list
 				$.get(url, function(data) {
 					var stats = data;
 					var regex = new RegExp('\\_\\['+ item.id +'\\]\\=(\\{.*?\\}\\;)');
-					// var stats = JSON.parse(data.match(regex)[1].slice(0, -1));
-					var stats = data;
-					var stats = stats.bonusStats;
+					var stats = data.bonusStats;
 
 					if(typeof callback === 'function') callback(stats);
 				});
 			}
 
+		// Generate the profiles table containing all the stats.
 			function generateTable() {
 				var table = document.querySelector('#profile_list > tbody');
 				for (var profile in Profiles) {
@@ -206,6 +214,7 @@
 				}
 			};
 
+		// Generate a simc output out of the selected profiles.
 			function generateOutput() {
 				// "Example_T20"_00001
 				var list = $('.table .selected').map(function() {
@@ -220,16 +229,10 @@
 				output.value = outputString;
 			}
 
-			function updatePlayerClass() {
-				playerClass = document.querySelector('#playerClass').value;
-				return (playerClass) ? true:false;
-			};
-
+		// Start parsing function.
 			function runParser() {
 				if(parserRunning) return;
 				parserRunning = true;
-				var validChoice = updatePlayerClass();
-				if(!validChoice) return;
 				Parse.profiles.init();
 				Parse.items();
 				gatherItemData(function() {
@@ -260,7 +263,6 @@
 						}
 						if(failsafe >= 10000) endFound = true;
 					}
-					// $(items).addClass('selected');
 				} else {
 					if(!$(this).hasClass('selected')) {
 						$('.lastSelected').removeClass('lastSelected');
@@ -338,21 +340,6 @@ trinket2=terror_from_below,id=147016,ilevel=930
 main_hand=felomelorn,id=128820,gem_id=147089/147079/147089,relic_ilevel=930/940/930
 off_hand=heart_of_the_phoenix,id=133959</textarea>
 		<textarea id="output" spellcheck=false style="margin: 0px; height: 40%; width: 40%;">Output is generated here.</textarea>
-		<select id="playerClass" style="position: absolute; margin: 1rem;">
-			<option value="" selected>--Choose Class--</option>
-			<option value="deathknight">Death Knight</option>
-			<option value="demonhunter">Demon Hunter</option>
-			<option value="druid">Druid</option>
-			<option value="hunter">Hunter</option>
-			<option value="mage">Mage</option>
-			<option value="monk">Monk</option>
-			<option value="paladin">Paladin</option>
-			<option value="priest">Priest</option>
-			<option value="rogue">Rogue</option>
-			<option value="shaman">Shaman</option>
-			<option value="warlock">Warlock</option>
-			<option value="warrior">Warrior</option>
-		</select>
 		<div style="display:inline-block">
 			<div class="wrapper" style="position: absolute; margin: -3rem 1rem; display: inline-block;">
 				<button onClick=runParser(); style="display: inline-block;">Start Parsing</button>
